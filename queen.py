@@ -1,9 +1,9 @@
-import matplotlib.pyplot as plt
 import sys
 import numpy as np
 import pdb
 import random
 import math
+from util import in_grid, allowable_moves
 '''
 9/15/16
 https://www.janestreet.com/puzzles/current-puzzle/
@@ -30,6 +30,7 @@ grid = [
     [8 ,  5, 13, 23, 29, 15, 23, 30],
 ]
 grid = np.array(grid).T
+squares = set([0, 1, 4, 9, 16, 25, 36, 49])
 
 def argmax(key_lst, val_lst):
     _max = val_lst[0]
@@ -46,6 +47,9 @@ def is_sq(val, tol=1e-5):
 
     sqrt = round(math.sqrt(val))
     return abs((sqrt*sqrt) - val) < tol
+
+def is_square(val):
+    return val in squares
 
 def in_grid(grid, loc):
     return 0 <= loc[0] < grid.shape[0] and 0 <= loc[1] < grid.shape[1]
@@ -99,52 +103,8 @@ class Agent(object):
         update_func = np.vectorize(lambda x: x + delta)
         self.grid = update_func(self.grid)
 
-    def allowable_moves(self):
-        return self._diag_moves() + self._rook_moves()
-
-    # TODO: This is gross
-    def _diag_moves(self):
-        l_moves = []
-        r_moves = []
-
-        for i in range(1, 8):
-            curr_loc = (self.x + i , self.y - i)
-            if in_grid(self.grid, curr_loc):
-                l_moves.append(curr_loc)
-            else:
-                break
-
-        for j in range(1, 8):
-            curr_loc = (self.x - j , self.y + j)
-            if in_grid(self.grid, curr_loc):
-                l_moves.append(curr_loc)
-            else:
-                break
-
-        for i in range(1, 8):
-            curr_loc = (self.x + i , self.y + i)
-            if in_grid(self.grid, curr_loc):
-                r_moves.append(curr_loc)
-            else:
-                break
-
-        for j in range(1, 8):
-            curr_loc = (self.x - j , self.y - j)
-            if in_grid(self.grid, curr_loc):
-                r_moves.append(curr_loc)
-            else:
-                break
-
-        return l_moves + r_moves
-
-
-    def _rook_moves(self):
-        v_moves = [(self.x, i) for i in range(self.max_x) if i != self.y]
-        h_moves = [(i, self.y) for i in range(8) if i != self.x]
-        return h_moves + v_moves
-
     def step(self):
-        possible_moves = self.allowable_moves()
+        possible_moves = self.allowable_moves(self.grid, self.x, self.y)
 
         if self.policy == 'greedy':
             self.greedy_move(possible_moves)
@@ -152,6 +112,8 @@ class Agent(object):
             self.greedy_rand_move(possible_moves)
         elif self.policy == 'random':
             self.random_move(possible_moves)
+        elif self.policy == 'manual':
+            self.manual_move(possible_moves)
         else:
             pass
 
@@ -165,16 +127,28 @@ class Agent(object):
         self.move(*loc)
 
     def greedy_rand_move(self, moves):
-        if random.random() > 0.5:
+        if random.random() > 0.8:
             self.random_move(moves)
 
         # filter onto the ones that are squares
         loc = (self.x, self.y)
         sqs = filter(lambda m: btw_sq(self.grid, m), moves)
         if len(sqs) == 0:
-            self.greedy_move(moves)
+            self.random_move(moves)
         else:
             self.greedy_move(sqs)
+
+    def manual_move(self, moves):
+        move_vals = [self.grid[x] for x in moves]
+        sq_moves = filter(lambda m: btw_sq(self.grid, m), moves)
+        sq_vals = [self.grid[x] for x in sq_moves]
+        self.pp_grid()
+        print "Current total: {}".format(self.total)
+        print "Allowable moves are: {}".format(sorted(zip(move_vals, moves)))
+        print "Allowable square moves are: {}".format(sorted(zip(sq_vals, sq_moves)))
+        inputs = raw_input("Enter a move:\n")
+        x, y = map(int, inputs.split())
+        self.move(x, y)
 
     def move(self, x, y):
         self.x = x
@@ -209,23 +183,30 @@ class Agent(object):
 
 def main():
     greedy_agent = Agent(grid, 'greedy')
-    greedy_sq_agent = Agent(grid, 'greedy_sq')
+    greedy_rand_agent = Agent(grid, 'greedy_rand')
     random_agent = Agent(grid, 'random')
 
     greedy_agent.run()
-    greedy_sq_agent.run()
+    greedy_rand_agent.run()
     random_agent.run()
 
     best = 0
     runs = int(sys.argv[1])
     vals = []
     for i in range(runs):
-        greedy_sq_agent.run()
-        best = max(greedy_sq_agent.total, best)
-        vals.append(greedy_sq_agent.total)
-        greedy_sq_agent.reset()
+        greedy_rand_agent.run()
+        best = max(greedy_rand_agent.total, best)
+        vals.append(greedy_rand_agent.total)
+        greedy_rand_agent.reset()
 
     print "Best for {} trials: {}".format(runs, best)
 
+def manual_play():
+    agent = Agent(grid, 'manual')
+    agent.run()
+    print agent.total
+    print agent.path
+    print len(agent.path)
+
 if __name__ == '__main__':
-    main()
+    manual_play()
